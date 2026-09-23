@@ -1,6 +1,7 @@
 import express, { type Request, type Response } from "express";
 import transactions from "../data/transactions.json";
 import classifications from "../data/classifications.json";
+import type { UpdateTransaction } from "./types.js";
 
 const app = express();
 const PORT = 3000;
@@ -13,7 +14,7 @@ app.get("/transactions", (req: Request, res: Response) => {
   res.status(200).json(transactions);
 });
 
-// Get one transaction
+// GET one transaction by id
 app.get("/transactions/:id", (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
@@ -26,6 +27,38 @@ app.get("/transactions/:id", (req: Request, res: Response) => {
       message: "Transaction not found",
     });
     return;
+  }
+
+  res.status(200).json(transaction);
+});
+
+// PUT update transaction by id
+app.put("/transactions/:id", (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+
+  const transaction = transactions.find(
+    (transaction) => transaction.id === id
+  );
+
+  if (!transaction) {
+    res.status(404).json({
+      message: "Transaction not found",
+    });
+    return;
+  }
+
+  const updates: UpdateTransaction = req.body;
+
+  if (updates.date !== undefined) {
+    transaction.date = updates.date;
+  }
+
+  if (updates.recipient !== undefined) {
+    transaction.recipient = updates.recipient;
+  }
+
+  if (updates.amount !== undefined) {
+    transaction.amount = updates.amount;
   }
 
   res.status(200).json(transaction);
