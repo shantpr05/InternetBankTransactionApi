@@ -64,6 +64,26 @@ app.put("/transactions/:id", (req: Request, res: Response) => {
   res.status(200).json(transaction);
 });
 
+// DELETE transaction by id
+app.delete("/transactions/:id", (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+
+  const transactionIndex = transactions.findIndex(
+    (transaction) => transaction.id === id
+  );
+
+  if (transactionIndex === -1) {
+    res.status(404).json({
+      message: "Transaction not found",
+    });
+    return;
+  }
+
+  const deletedTransaction = transactions.splice(transactionIndex, 1)[0];
+
+  res.status(200).json(deletedTransaction);
+});
+
 // POST create a new transaction
 app.post("/transactions", (req: Request, res: Response) => {
   const { date, recipient, amount } = req.body;
