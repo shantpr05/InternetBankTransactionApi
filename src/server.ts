@@ -8,12 +8,28 @@ const PORT = 3000;
 // Middleware
 app.use(express.json());
 
-// GET all transactions
+// GET all transactions with optional date filtering
 app.get("/transactions", (req: Request, res: Response) => {
-  res.status(200).json(transactions);
+  const { from, to } = req.query;
+
+  let filteredTransactions = transactions;
+
+  if (typeof from === "string") {
+    filteredTransactions = filteredTransactions.filter(
+      (transaction) => transaction.date >= from
+    );
+  }
+
+  if (typeof to === "string") {
+    filteredTransactions = filteredTransactions.filter(
+      (transaction) => transaction.date <= to
+    );
+  }
+
+  res.status(200).json(filteredTransactions);
 });
 
-// Get one transaction
+// GET one transaction
 app.get("/transactions/:id", (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
@@ -50,7 +66,7 @@ app.post("/transactions", (req: Request, res: Response) => {
       : 1;
 
   // Classification mapping
-  const classifications: Record<string, string> = {
+  const classificationMap: Record<string, string> = {
     ICA: "Food",
     SL: "Transport",
     Netflix: "Entertainment",
@@ -60,7 +76,7 @@ app.post("/transactions", (req: Request, res: Response) => {
   let classification: string | undefined;
 
   if (amount < 0) {
-    classification = classifications[recipient] ?? "Unknown";
+    classification = classificationMap[recipient] ?? "Unknown";
   }
 
   const newTransaction = {
@@ -75,6 +91,7 @@ app.post("/transactions", (req: Request, res: Response) => {
 
   res.status(201).json(newTransaction);
 });
+
 // GET all classifications
 app.get("/classifications", (req: Request, res: Response) => {
   res.status(200).json(classifications);
