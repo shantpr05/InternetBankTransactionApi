@@ -8,9 +8,64 @@ const PORT = 3000;
 // Middleware
 app.use(express.json());
 
+// Check if a date is valid and uses YYYY-MM-DD format
+const isValidDate = (date: string): boolean => {
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+  if (!datePattern.test(date)) {
+    return false;
+  }
+
+  const parsedDate = new Date(`${date}T00:00:00Z`);
+
+  return (
+    !Number.isNaN(parsedDate.getTime()) &&
+    parsedDate.toISOString().slice(0, 10) === date
+  );
+};
+
 // GET all transactions with optional date filtering
 app.get("/transactions", (req: Request, res: Response) => {
   const { from, to } = req.query;
+
+  // Validate that from and to are single query values
+  if (
+    (from !== undefined && typeof from !== "string") ||
+    (to !== undefined && typeof to !== "string")
+  ) {
+    res.status(400).json({
+      message: "Invalid date filter",
+    });
+    return;
+  }
+
+  // Validate from date
+  if (typeof from === "string" && !isValidDate(from)) {
+    res.status(400).json({
+      message: "Invalid from date. Use YYYY-MM-DD format",
+    });
+    return;
+  }
+
+  // Validate to date
+  if (typeof to === "string" && !isValidDate(to)) {
+    res.status(400).json({
+      message: "Invalid to date. Use YYYY-MM-DD format",
+    });
+    return;
+  }
+
+  // Validate date interval
+  if (
+    typeof from === "string" &&
+    typeof to === "string" &&
+    from > to
+  ) {
+    res.status(400).json({
+      message: "Invalid date interval: from cannot be later than to",
+    });
+    return;
+  }
 
   let filteredTransactions = transactions;
 
