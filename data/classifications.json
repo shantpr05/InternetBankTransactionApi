@@ -1,0 +1,6 @@
+[
+    {"recipient": "IKEA", "classification": "Household"},
+    {"recipient": "SL", "classification": "Transport"},
+    {"recipient": "ICA", "classification": "Food"},
+    {"recipient": "Netflix", "classification": "Entertainment"}
+]
