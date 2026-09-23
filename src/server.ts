@@ -13,6 +13,24 @@ app.get("/transactions", (req: Request, res: Response) => {
   res.status(200).json(transactions);
 });
 
+// Get one transaction
+app.get("/transactions/:id", (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+
+  const transaction = transactions.find(
+    (transaction) => transaction.id === id
+  );
+
+  if (!transaction) {
+    res.status(404).json({
+      message: "Transaction not found",
+    });
+    return;
+  }
+
+  res.status(200).json(transaction);
+});
+
 // GET all classifications
 app.get("/classifications", (req: Request, res: Response) => {
   res.status(200).json(classifications);
@@ -20,5 +38,5 @@ app.get("/classifications", (req: Request, res: Response) => {
 
 // Start the server on port 3000
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server is running at http://localhost:${PORT}`);
 });
