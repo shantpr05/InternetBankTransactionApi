@@ -31,6 +31,50 @@ app.get("/transactions/:id", (req: Request, res: Response) => {
   res.status(200).json(transaction);
 });
 
+// Create a new transaction
+app.post("/transactions", (req: Request, res: Response) => {
+  const { date, recipient, amount } = req.body;
+
+  // Validate required fields
+  if (!date || !recipient || amount === undefined) {
+    res.status(400).json({
+      message: "date, recipient and amount are required",
+    });
+    return;
+  }
+
+  // Create a new ID
+  const newId =
+    transactions.length > 0
+      ? Math.max(...transactions.map((transaction) => transaction.id)) + 1
+      : 1;
+
+  // Classification mapping
+  const classifications: Record<string, string> = {
+    ICA: "Food",
+    SL: "Transport",
+    Netflix: "Entertainment",
+  };
+
+  // Only outgoing transactions need classification
+  let classification: string | undefined;
+
+  if (amount < 0) {
+    classification = classifications[recipient] ?? "Unknown";
+  }
+
+  const newTransaction = {
+    id: newId,
+    date,
+    recipient,
+    amount,
+    ...(classification && { classification }),
+  };
+
+  transactions.push(newTransaction);
+
+  res.status(201).json(newTransaction);
+});
 // GET all classifications
 app.get("/classifications", (req: Request, res: Response) => {
   res.status(200).json(classifications);
