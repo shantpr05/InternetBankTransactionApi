@@ -1,13 +1,7 @@
-import { createInterface } from "node:readline/promises";
-import { stdin as input, stdout as output } from "node:process";
+import { input, select } from "@inquirer/prompts";
 import type { Transaction, UpdateTransaction } from "./types";
 
 const API_URL = "http://localhost:3000";
-
-const readline = createInterface({
-  input,
-  output,
-});
 
 const getTransactionById = async (
   id: number,
@@ -32,7 +26,10 @@ const getTransactionById = async (
 };
 
 const updateTransaction = async (): Promise<void> => {
-  const idInput = await readline.question("Enter transaction ID: ");
+  const idInput = await input({
+    message: "Enter transaction ID:",
+  });
+
   const id = Number(idInput);
 
   if (!Number.isInteger(id) || id <= 0) {
@@ -53,19 +50,19 @@ const updateTransaction = async (): Promise<void> => {
   console.log(`Recipient: ${transaction.recipient}`);
   console.log(`Amount: ${transaction.amount}`);
 
-  console.log("\nPress Enter to keep the current value.");
+  console.log("\nPress Enter to keep the current value.\n");
 
-  const date = await readline.question(
-    `New date (${transaction.date}): `,
-  );
+  const date = await input({
+    message: `New date (${transaction.date}):`,
+  });
 
-  const recipient = await readline.question(
-    `New recipient (${transaction.recipient}): `,
-  );
+  const recipient = await input({
+    message: `New recipient (${transaction.recipient}):`,
+  });
 
-  const amountInput = await readline.question(
-    `New amount (${transaction.amount}): `,
-  );
+  const amountInput = await input({
+    message: `New amount (${transaction.amount}):`,
+  });
 
   const updates: UpdateTransaction = {};
 
@@ -129,28 +126,31 @@ const showMenu = async (): Promise<void> => {
   let running = true;
 
   while (running) {
-    console.log("\n--- Internet Bank Transaction CLI ---");
-    console.log("1. Update transaction");
-    console.log("0. Exit");
+    const choice = await select({
+      message: "Choose an option:",
+      choices: [
+        {
+          name: "Update transaction",
+          value: "update",
+        },
+        {
+          name: "Exit",
+          value: "exit",
+        },
+      ],
+    });
 
-    const choice = await readline.question("\nChoose an option: ");
-
-    switch (choice.trim()) {
-      case "1":
+    switch (choice) {
+      case "update":
         await updateTransaction();
         break;
 
-      case "0":
+      case "exit":
         running = false;
         console.log("Goodbye!");
         break;
-
-      default:
-        console.log("Invalid option.");
     }
   }
-
-  readline.close();
 };
 
 const main = async (): Promise<void> => {
@@ -159,5 +159,4 @@ const main = async (): Promise<void> => {
 
 main().catch((error) => {
   console.error("Unexpected error:", error);
-  readline.close();
 });
