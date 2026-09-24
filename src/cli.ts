@@ -7,18 +7,26 @@ import type {
 
 const API_URL = "http://localhost:3000";
 
+const promptTheme = {
+  prefix: "",
+};
+
 // View all transactions
 const viewTransactions = async (): Promise<void> => {
   try {
     const response = await fetch(`${API_URL}/transactions`);
+
     if (!response.ok) {
       throw new Error(`Request failed with status ${response.status}`);
     }
+
     const transactions = (await response.json()) as Transaction[];
+
     if (transactions.length === 0) {
       console.log("No transactions found.");
       return;
     }
+
     console.table(transactions);
   } catch (error) {
     console.error("Could not connect to the API.");
@@ -26,7 +34,10 @@ const viewTransactions = async (): Promise<void> => {
   }
 };
 
-const getTransactionById = async (id: number): Promise<Transaction | null> => {
+// Get one transaction by ID
+const getTransactionById = async (
+  id: number,
+): Promise<Transaction | null> => {
   try {
     const response = await fetch(`${API_URL}/transactions/${id}`);
 
@@ -46,19 +57,23 @@ const getTransactionById = async (id: number): Promise<Transaction | null> => {
   }
 };
 
+// Create transaction
 const createTransaction = async (): Promise<void> => {
   console.log("\nEnter new transaction details:");
 
   const date = await input({
-    message: "Date (YYYY-MM-DD):",
+    message: "Date (YYYY-MM-DD)?",
+    theme: promptTheme,
   });
 
   const recipient = await input({
-    message: "Recipient:",
+    message: "Recipient?",
+    theme: promptTheme,
   });
 
   const amountInput = await input({
-    message: "Amount:",
+    message: "Amount?",
+    theme: promptTheme,
   });
 
   if (
@@ -110,9 +125,39 @@ const createTransaction = async (): Promise<void> => {
   }
 };
 
+// View one transaction
+const viewTransaction = async (): Promise<void> => {
+  const idInput = await input({
+    message: "Enter transaction ID?",
+    theme: promptTheme,
+  });
+
+  const id = Number(idInput);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    console.log("Invalid transaction ID.");
+    return;
+  }
+
+  const transaction = await getTransactionById(id);
+
+  if (!transaction) {
+    console.log("Transaction not found.");
+    return;
+  }
+
+  console.log("\nTransaction:");
+  console.log(`ID: ${transaction.id}`);
+  console.log(`Date: ${transaction.date}`);
+  console.log(`Recipient: ${transaction.recipient}`);
+  console.log(`Amount: ${transaction.amount}`);
+};
+
+// Update transaction
 const updateTransaction = async (): Promise<void> => {
   const idInput = await input({
-    message: "Enter transaction ID:",
+    message: "Enter transaction ID?",
+    theme: promptTheme,
   });
 
   const id = Number(idInput);
@@ -138,15 +183,18 @@ const updateTransaction = async (): Promise<void> => {
   console.log("\nPress Enter to keep the current value.\n");
 
   const date = await input({
-    message: `New date (${transaction.date}):`,
+    message: `New date (${transaction.date})?`,
+    theme: promptTheme,
   });
 
   const recipient = await input({
-    message: `New recipient (${transaction.recipient}):`,
+    message: `New recipient (${transaction.recipient})?`,
+    theme: promptTheme,
   });
 
   const amountInput = await input({
-    message: `New amount (${transaction.amount}):`,
+    message: `New amount (${transaction.amount})?`,
+    theme: promptTheme,
   });
 
   const updates: UpdateTransaction = {};
@@ -207,49 +255,100 @@ const updateTransaction = async (): Promise<void> => {
   }
 };
 
-const viewTransaction = async (): Promise<void> => {
-  const idInput = await input({
-    message: "Enter transaction ID:",
+// Filter transactions by date
+const filterTransactionsByDate = async (): Promise<void> => {
+  console.log("\nFilter transactions by date.");
+  console.log("Press Enter to leave a date empty.\n");
+
+  const from = await input({
+    message: "From date (YYYY-MM-DD)?",
+    theme: promptTheme,
   });
 
-  const id = Number(idInput);
+  const to = await input({
+    message: "To date (YYYY-MM-DD)?",
+    theme: promptTheme,
+  });
 
-  if (!Number.isInteger(id) || id <= 0) {
-    console.log("Invalid transaction ID.");
+  const fromDate = from.trim();
+  const toDate = to.trim();
+
+  if (fromDate === "" && toDate === "") {
+    console.log("Enter at least one date to filter transactions.");
     return;
   }
 
-  const transaction = await getTransactionById(id);
+  const params = new URLSearchParams();
 
-  if (!transaction) {
-    console.log("Transaction not found.");
-    return;
+  if (fromDate !== "") {
+    params.set("from", fromDate);
   }
 
-  console.log("\nTransaction:");
-  console.log(`ID: ${transaction.id}`);
-  console.log(`Date: ${transaction.date}`);
-  console.log(`Recipient: ${transaction.recipient}`);
-  console.log(`Amount: ${transaction.amount}`);
+  if (toDate !== "") {
+    params.set("to", toDate);
+  }
+
+  try {
+    const response = await fetch(
+      `${API_URL}/transactions?${params.toString()}`,
+    );
+
+    if (!response.ok) {
+      const errorResponse = (await response.json()) as {
+        message?: string;
+      };
+
+      console.log(
+        errorResponse.message ??
+          `Filter failed with status ${response.status}.`,
+      );
+
+      return;
+    }
+
+    const transactions = (await response.json()) as Transaction[];
+
+    if (transactions.length === 0) {
+      console.log("No transactions found for the selected date range.");
+      return;
+    }
+
+    console.log("\nFiltered transactions:");
+    console.table(transactions);
+  } catch (error) {
+    console.error("Could not connect to the API.");
+    console.error(error);
+  }
 };
 
+// CLI menu
 const showMenu = async (): Promise<void> => {
   let running = true;
 
   while (running) {
     const choice = await select({
-      message: "Choose an option:",
+      message: "Choose an option?",
+      theme: promptTheme,
       choices: [
-        { name: "Create a new transaction", value: "create" },
+        {
+          name: "Create a new transaction",
+          value: "create",
+        },
         {
           name: "View all transactions",
           value: "view-all",
         },
-
-        { name: "View one transaction", value: "view" },
+        {
+          name: "View one transaction",
+          value: "view",
+        },
         {
           name: "Update transaction",
           value: "update",
+        },
+        {
+          name: "Filter transactions by date",
+          value: "filter-date",
         },
         {
           name: "Exit",
@@ -266,13 +365,17 @@ const showMenu = async (): Promise<void> => {
       case "view-all":
         await viewTransactions();
         break;
-        
+
       case "view":
         await viewTransaction();
         break;
 
       case "update":
         await updateTransaction();
+        break;
+
+      case "filter-date":
+        await filterTransactionsByDate();
         break;
 
       case "exit":
