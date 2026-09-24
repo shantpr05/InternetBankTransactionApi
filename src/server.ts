@@ -1,6 +1,7 @@
 import express, { type Request, type Response } from "express";
 import transactions from "../data/transactions.json";
 import classifications from "../data/classifications.json";
+import { type UpdateTransaction } from "./types";
 
 const app = express();
 const PORT = 3000;
@@ -56,11 +57,7 @@ app.get("/transactions", (req: Request, res: Response) => {
   }
 
   // Validate date interval
-  if (
-    typeof from === "string" &&
-    typeof to === "string" &&
-    from > to
-  ) {
+  if (typeof from === "string" && typeof to === "string" && from > to) {
     res.status(400).json({
       message: "Invalid date interval: from cannot be later than to",
     });
@@ -71,13 +68,13 @@ app.get("/transactions", (req: Request, res: Response) => {
 
   if (typeof from === "string") {
     filteredTransactions = filteredTransactions.filter(
-      (transaction) => transaction.date >= from
+      (transaction) => transaction.date >= from,
     );
   }
 
   if (typeof to === "string") {
     filteredTransactions = filteredTransactions.filter(
-      (transaction) => transaction.date <= to
+      (transaction) => transaction.date <= to,
     );
   }
 
@@ -88,9 +85,7 @@ app.get("/transactions", (req: Request, res: Response) => {
 app.get("/transactions/:id", (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const transaction = transactions.find(
-    (transaction) => transaction.id === id
-  );
+  const transaction = transactions.find((transaction) => transaction.id === id);
 
   if (!transaction) {
     res.status(404).json({
@@ -107,7 +102,7 @@ app.delete("/transactions/:id", (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
   const transactionIndex = transactions.findIndex(
-    (transaction) => transaction.id === id
+    (transaction) => transaction.id === id,
   );
 
   if (transactionIndex === -1) {
@@ -120,6 +115,36 @@ app.delete("/transactions/:id", (req: Request, res: Response) => {
   const deletedTransaction = transactions.splice(transactionIndex, 1)[0];
 
   res.status(200).json(deletedTransaction);
+});
+
+// PUT update transaction by id
+app.put("/transactions/:id", (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+
+  const transaction = transactions.find((transaction) => transaction.id === id);
+
+  if (!transaction) {
+    res.status(404).json({
+      message: "Transaction not found",
+    });
+    return;
+  }
+
+  const updates: UpdateTransaction = req.body;
+
+  if (updates.date !== undefined) {
+    transaction.date = updates.date;
+  }
+
+  if (updates.recipient !== undefined) {
+    transaction.recipient = updates.recipient;
+  }
+
+  if (updates.amount !== undefined) {
+    transaction.amount = updates.amount;
+  }
+
+  res.status(200).json(transaction);
 });
 
 // POST create a new transaction
