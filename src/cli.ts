@@ -1,5 +1,9 @@
 import { input, select } from "@inquirer/prompts";
-import type { Transaction, UpdateTransaction } from "./types";
+import type {
+  Transaction,
+  UpdateTransaction,
+  CreateTransaction,
+} from "./types";
 
 const API_URL = "http://localhost:3000";
 
@@ -22,6 +26,70 @@ const getTransactionById = async (
     console.error("Could not connect to the API.");
     console.error(error);
     return null;
+  }
+};
+
+const createTransaction = async (): Promise<void> => {
+  console.log("\nEnter new transaction details:");
+
+  const date = await input({
+    message: "Date (YYYY-MM-DD):",
+  });
+
+  const recipient = await input({
+    message: "Recipient:",
+  });
+
+  const amountInput = await input({
+    message: "Amount:",
+  });
+
+  if (
+    date.trim() === "" ||
+    recipient.trim() === "" ||
+    amountInput.trim() === ""
+  ) {
+    console.log("Date, recipient and amount are all required.");
+    return;
+  }
+
+  const amount = Number(amountInput);
+
+  if (Number.isNaN(amount)) {
+    console.log("Invalid amount.");
+    return;
+  }
+
+  const transaction: CreateTransaction = {
+    date: date.trim(),
+    recipient: recipient.trim(),
+    amount,
+  };
+
+  try {
+    const response = await fetch(`${API_URL}/transactions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(transaction),
+    });
+
+    if (!response.ok) {
+      console.log(`Create failed with status ${response.status}.`);
+      return;
+    }
+
+    const createdTransaction = (await response.json()) as Transaction;
+
+    console.log("\nTransaction created successfully:");
+    console.log(`ID: ${createdTransaction.id}`);
+    console.log(`Date: ${createdTransaction.date}`);
+    console.log(`Recipient: ${createdTransaction.recipient}`);
+    console.log(`Amount: ${createdTransaction.amount}`);
+  } catch (error) {
+    console.error("Could not connect to the API.");
+    console.error(error);
   }
 };
 
@@ -140,7 +208,7 @@ const viewTransaction = async (): Promise<void> => {
     console.log("Transaction not found.");
     return;
   }
-  
+
   console.log("\nTransaction:");
   console.log(`ID: ${transaction.id}`);
   console.log(`Date: ${transaction.date}`);
@@ -155,8 +223,8 @@ const showMenu = async (): Promise<void> => {
     const choice = await select({
       message: "Choose an option:",
       choices: [
-        { name: "View one transaction",
-          value: "view" },
+        { name: "Create a new transaction", value: "create" },
+        { name: "View one transaction", value: "view" },
         {
           name: "Update transaction",
           value: "update",
@@ -169,6 +237,10 @@ const showMenu = async (): Promise<void> => {
     });
 
     switch (choice) {
+      case "create":
+        await createTransaction();
+        break;
+
       case "view":
         await viewTransaction();
         break;
