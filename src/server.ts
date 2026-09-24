@@ -1,7 +1,7 @@
 import express, { type Request, type Response } from "express";
 import transactions from "../data/transactions.json";
 import classifications from "../data/classifications.json";
-import { type UpdateTransaction } from "./types";
+import { type CreateTransaction, type UpdateTransaction } from "./types";
 
 const app = express();
 const PORT = 3000;
@@ -149,7 +149,7 @@ app.put("/transactions/:id", (req: Request, res: Response) => {
 
 // POST create a new transaction
 app.post("/transactions", (req: Request, res: Response) => {
-  const { date, recipient, amount } = req.body;
+  const { date, recipient, amount }: CreateTransaction = req.body;
 
   // Validate required fields
   if (!date || !recipient || amount === undefined) {
