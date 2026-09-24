@@ -1,7 +1,6 @@
 import express, { type Request, type Response } from "express";
 import transactions from "../data/transactions.json";
 import classifications from "../data/classifications.json";
-import type { UpdateTransaction } from "./types.js";
 
 const app = express();
 const PORT = 3000;
@@ -9,12 +8,28 @@ const PORT = 3000;
 // Middleware
 app.use(express.json());
 
-// GET all transactions
+// GET all transactions with optional date filtering
 app.get("/transactions", (req: Request, res: Response) => {
-  res.status(200).json(transactions);
+  const { from, to } = req.query;
+
+  let filteredTransactions = transactions;
+
+  if (typeof from === "string") {
+    filteredTransactions = filteredTransactions.filter(
+      (transaction) => transaction.date >= from
+    );
+  }
+
+  if (typeof to === "string") {
+    filteredTransactions = filteredTransactions.filter(
+      (transaction) => transaction.date <= to
+    );
+  }
+
+  res.status(200).json(filteredTransactions);
 });
 
-// GET one transaction by id
+// GET one transaction
 app.get("/transactions/:id", (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
@@ -27,38 +42,6 @@ app.get("/transactions/:id", (req: Request, res: Response) => {
       message: "Transaction not found",
     });
     return;
-  }
-
-  res.status(200).json(transaction);
-});
-
-// PUT update transaction by id
-app.put("/transactions/:id", (req: Request, res: Response) => {
-  const id = Number(req.params.id);
-
-  const transaction = transactions.find(
-    (transaction) => transaction.id === id
-  );
-
-  if (!transaction) {
-    res.status(404).json({
-      message: "Transaction not found",
-    });
-    return;
-  }
-
-  const updates: UpdateTransaction = req.body;
-
-  if (updates.date !== undefined) {
-    transaction.date = updates.date;
-  }
-
-  if (updates.recipient !== undefined) {
-    transaction.recipient = updates.recipient;
-  }
-
-  if (updates.amount !== undefined) {
-    transaction.amount = updates.amount;
   }
 
   res.status(200).json(transaction);
