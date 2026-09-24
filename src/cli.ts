@@ -1,4 +1,4 @@
-import { input, select } from "@inquirer/prompts";
+import { confirm, input, select } from "@inquirer/prompts";
 import type {
   Transaction,
   UpdateTransaction,
@@ -255,6 +255,72 @@ const updateTransaction = async (): Promise<void> => {
   }
 };
 
+// Delete transaction
+const deleteTransaction = async (): Promise<void> => {
+  const idInput = await input({
+    message: "Enter transaction ID?",
+    theme: promptTheme,
+  });
+
+  const id = Number(idInput);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    console.log("Invalid transaction ID.");
+    return;
+  }
+
+  const transaction = await getTransactionById(id);
+
+  if (!transaction) {
+    console.log("Transaction not found.");
+    return;
+  }
+
+  console.log("\nTransaction to delete:");
+  console.log(`ID: ${transaction.id}`);
+  console.log(`Date: ${transaction.date}`);
+  console.log(`Recipient: ${transaction.recipient}`);
+  console.log(`Amount: ${transaction.amount}`);
+
+  const shouldDelete = await confirm({
+    message: "Delete this transaction?",
+    default: false,
+    theme: promptTheme,
+  });
+
+  if (!shouldDelete) {
+    console.log("Delete cancelled.");
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/transactions/${id}`, {
+      method: "DELETE",
+    });
+
+    if (response.status === 404) {
+      console.log("Transaction not found.");
+      return;
+    }
+
+    if (!response.ok) {
+      console.log(`Delete failed with status ${response.status}.`);
+      return;
+    }
+
+    const deletedTransaction = (await response.json()) as Transaction;
+
+    console.log("\nTransaction deleted successfully:");
+    console.log(`ID: ${deletedTransaction.id}`);
+    console.log(`Date: ${deletedTransaction.date}`);
+    console.log(`Recipient: ${deletedTransaction.recipient}`);
+    console.log(`Amount: ${deletedTransaction.amount}`);
+  } catch (error) {
+    console.error("Could not connect to the API.");
+    console.error(error);
+  }
+};
+
 // Filter transactions by date
 const filterTransactionsByDate = async (): Promise<void> => {
   console.log("\nFilter transactions by date.");
@@ -347,6 +413,10 @@ const showMenu = async (): Promise<void> => {
           value: "update",
         },
         {
+          name: "Delete transaction",
+          value: "delete",
+        },
+        {
           name: "Filter transactions by date",
           value: "filter-date",
         },
@@ -372,6 +442,10 @@ const showMenu = async (): Promise<void> => {
 
       case "update":
         await updateTransaction();
+        break;
+
+      case "delete":
+        await deleteTransaction();
         break;
 
       case "filter-date":
