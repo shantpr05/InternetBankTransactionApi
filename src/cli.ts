@@ -3,9 +3,26 @@ import type { Transaction, UpdateTransaction } from "./types";
 
 const API_URL = "http://localhost:3000";
 
-const getTransactionById = async (
-  id: number,
-): Promise<Transaction | null> => {
+// View all transactions
+const viewTransactions = async (): Promise<void> => {
+  try {
+    const response = await fetch(`${API_URL}/transactions`);
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
+    const transactions = (await response.json()) as Transaction[];
+    if (transactions.length === 0) {
+      console.log("No transactions found.");
+      return;
+    }
+    console.table(transactions);
+  } catch (error) {
+    console.error("Could not connect to the API.");
+    console.error(error);
+  }
+};
+
+const getTransactionById = async (id: number): Promise<Transaction | null> => {
   try {
     const response = await fetch(`${API_URL}/transactions/${id}`);
 
@@ -140,7 +157,7 @@ const viewTransaction = async (): Promise<void> => {
     console.log("Transaction not found.");
     return;
   }
-  
+
   console.log("\nTransaction:");
   console.log(`ID: ${transaction.id}`);
   console.log(`Date: ${transaction.date}`);
@@ -155,8 +172,12 @@ const showMenu = async (): Promise<void> => {
     const choice = await select({
       message: "Choose an option:",
       choices: [
-        { name: "View one transaction",
-          value: "view" },
+        {
+          name: "View all transactions",
+          value: "view-all",
+        },
+
+        { name: "View one transaction", value: "view" },
         {
           name: "Update transaction",
           value: "update",
@@ -169,6 +190,10 @@ const showMenu = async (): Promise<void> => {
     });
 
     switch (choice) {
+      case "view-all":
+        await viewTransactions();
+        break;
+        
       case "view":
         await viewTransaction();
         break;
