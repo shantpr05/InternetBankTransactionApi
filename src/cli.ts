@@ -122,6 +122,32 @@ const updateTransaction = async (): Promise<void> => {
   }
 };
 
+const viewTransaction = async (): Promise<void> => {
+  const idInput = await input({
+    message: "Enter transaction ID:",
+  });
+
+  const id = Number(idInput);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    console.log("Invalid transaction ID.");
+    return;
+  }
+
+  const transaction = await getTransactionById(id);
+
+  if (!transaction) {
+    console.log("Transaction not found.");
+    return;
+  }
+  
+  console.log("\nTransaction:");
+  console.log(`ID: ${transaction.id}`);
+  console.log(`Date: ${transaction.date}`);
+  console.log(`Recipient: ${transaction.recipient}`);
+  console.log(`Amount: ${transaction.amount}`);
+};
+
 const showMenu = async (): Promise<void> => {
   let running = true;
 
@@ -129,6 +155,8 @@ const showMenu = async (): Promise<void> => {
     const choice = await select({
       message: "Choose an option:",
       choices: [
+        { name: "View one transaction",
+          value: "view" },
         {
           name: "Update transaction",
           value: "update",
@@ -141,6 +169,10 @@ const showMenu = async (): Promise<void> => {
     });
 
     switch (choice) {
+      case "view":
+        await viewTransaction();
+        break;
+
       case "update":
         await updateTransaction();
         break;
