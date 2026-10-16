@@ -6,9 +6,13 @@ import express, {
 import transactions from "../data/transactions.json";
 import classifications from "../data/classifications.json";
 import { type UpdateTransaction } from "./types";
+import dotenv from "dotenv";
+import { pool } from "./db";
+
+dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Middleware
 app.use(express.json());
