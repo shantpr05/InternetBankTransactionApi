@@ -9,6 +9,11 @@ export interface ClassifiedTransaction {
   classification: string;
 }
 
+export interface RecipientClassification {
+  recipient: string;
+  classification: string;
+}
+
 export async function getClassifiedTransactions(): Promise<
   ClassifiedTransaction[]
 > {
@@ -23,6 +28,18 @@ export async function getClassifiedTransactions(): Promise<
     LEFT JOIN recipient_classifications AS rc
       ON t.recipient = rc.recipient
     ORDER BY t.id
+  `);
+
+  return result.rows;
+}
+
+export async function getRecipientClassifications(): Promise<
+  RecipientClassification[]
+> {
+  const result = await pool.query<RecipientClassification>(`
+    SELECT recipient, classification
+    FROM recipient_classifications
+    ORDER BY recipient
   `);
 
   return result.rows;
