@@ -5,8 +5,8 @@ import express, {
   type Response,
 } from "express";
 import transactions from "../data/transactions.json";
-import classifications from "../data/classifications.json";
 import dotenv from "dotenv";
+import { getRecipientClassifications } from "./classifications";
 import {
   createTransactionSchema,
   dateFilterSchema,
@@ -186,10 +186,19 @@ app.post("/transactions", (req: Request, res: Response) => {
   res.status(201).json(newTransaction);
 });
 
-// GET all classifications
-app.get("/classifications", (_req: Request, res: Response) => {
-  res.status(200).json(classifications);
-});
+// GET classifications from PostgreSQL
+app.get(
+  "/classifications",
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const classifications = await getRecipientClassifications();
+
+      res.status(200).json(classifications);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 // Handle unknown routes
 app.use((_req: Request, res: Response) => {
