@@ -1,10 +1,9 @@
-
+import { pool } from "./db";
 import express, {
   type NextFunction,
   type Request,
   type Response,
 } from "express";
-import transactions from "../data/transactions.json";
 import dotenv from "dotenv";
 import { getRecipientClassifications } from "./classifications";
 import {
@@ -35,7 +34,8 @@ const sendValidationError = (
 };
 
 // GET all transactions with optional date filtering
-app.get("/transactions", (req: Request, res: Response) => {
+
+app.get("/transactions", async (req: Request, res: Response) => {
   const validation = dateFilterSchema.safeParse(req.query);
 
   if (!validation.success) {
@@ -45,17 +45,33 @@ app.get("/transactions", (req: Request, res: Response) => {
 
   const { from, to } = validation.data;
 
-  const filteredTransactions = transactions.filter(
-    (transaction) =>
-      (!from || transaction.date >= from) &&
-      (!to || transaction.date <= to),
-  );
+  try {
+    const result = await pool.query(
+      `SELECT
+         t.id,
+         t.date,
+         t.recipient,
+         t.amount,
+         COALESCE(rc.classification, 'Unknown') AS classification
+       FROM public.transactions AS t
+       LEFT JOIN public.recipient_classifications AS rc
+         ON rc.recipient = t.recipient
+       WHERE ($1::date IS NULL OR t.date >= $1::date)
+         AND ($2::date IS NULL OR t.date <= $2::date)
+       ORDER BY t.date, t.id`,
+      [from ?? null, to ?? null],
+    );
 
-  res.status(200).json(filteredTransactions);
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 // GET one transaction
-app.get("/transactions/:id", (req: Request, res: Response) => {
+
+app.get("/transactions/:id", async (req: Request, res: Response) => {
   const validation = transactionIdSchema.safeParse(req.params.id);
 
   if (!validation.success) {
@@ -63,18 +79,31 @@ app.get("/transactions/:id", (req: Request, res: Response) => {
     return;
   }
 
-  const transaction = transactions.find(
-    (item) => item.id === validation.data,
-  );
+  try {
+    const result = await pool.query(
+      `SELECT
+         t.id,
+         t.date,
+         t.recipient,
+         t.amount,
+         COALESCE(rc.classification, 'Unknown') AS classification
+       FROM public.transactions AS t
+       LEFT JOIN public.recipient_classifications AS rc
+         ON rc.recipient = t.recipient
+       WHERE t.id = $1`,
+      [validation.data],
+    );
 
-  if (!transaction) {
-    res.status(404).json({
-      message: "Transaction not found",
-    });
-    return;
+    if (result.rows.length === 0) {
+      res.status(404).json({ message: "Transaction not found" });
+      return;
+    }
+
+    res.status(200).json(result.rows[0]);
+  } catch (error) {
+    console.error("Error fetching transaction:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
-
-  res.status(200).json(transaction);
 });
 
 // DELETE transaction by id
@@ -113,78 +142,64 @@ app.delete("/transactions/:id", async (req: Request, res: Response) => {
 });
 
 // PUT update transaction by id
+
 app.put("/transactions/:id", async (req: Request, res: Response) => {
-  const idParam = req.params.id;
+  const idValidation = transactionIdSchema.safeParse(req.params.id);
 
   if (!idValidation.success) {
     sendValidationError(res, idValidation.error.issues);
     return;
   }
 
-  const id = Number(idParam);
-
-  if (!isObjectBody(req.body)) {
-    res.status(400).json({
-      message: "Request body must be a JSON object",
-    });
-    return;
-  }
-
-  const { date, recipient, amount } = req.body;
+  const bodyValidation = updateTransactionSchema.safeParse(req.body);
 
   if (!bodyValidation.success) {
     sendValidationError(res, bodyValidation.error.issues);
     return;
   }
 
+  const id = idValidation.data;
   const { date, recipient, amount } = bodyValidation.data;
-
-  if (date !== undefined) {
-    transaction.date = date;
-  }
-
-  if (recipient !== undefined) {
-    transaction.recipient = recipient;
-  }
-
-  if (amount !== undefined) {
-    updates.amount = amount;
-  }
 
   try {
     const result = await pool.query(
-      ` 
-      UPDATE transactions
-      SET 
-      date = COALESCE($1, date),
-      recipient = COALESCE($2, recipient),
-      amount = COALESCE($3, amount)
-      WHERE id = $4
-      RETURNING *
-      `,
-      [updates.date, updates.recipient, updates.amount, id],
+      `UPDATE public.transactions
+       SET date = COALESCE($1, date),
+           recipient = COALESCE($2, recipient),
+           amount = COALESCE($3, amount)
+       WHERE id = $4
+       RETURNING id, date, recipient, amount`,
+      [date ?? null, recipient ?? null, amount ?? null, id],
     );
 
-    const updatedTransaction = result.rows[0];
-
-    if (!updatedTransaction) {
-      res.status(404).json({
-        message: "Transaction not found",
-      });
+    if (result.rows.length === 0) {
+      res.status(404).json({ message: "Transaction not found" });
       return;
     }
 
-    res.status(200).json(updatedTransaction);
-  } catch (error: unknown) {
-    console.error(error);
-    res.status(500).json({
-      message: "Internal server error",
+    const updated = result.rows[0];
+
+    const classificationResult = await pool.query(
+      `SELECT classification
+       FROM public.recipient_classifications
+       WHERE recipient = $1`,
+      [updated.recipient],
+    );
+
+    res.status(200).json({
+      ...updated,
+      classification:
+        classificationResult.rows[0]?.classification ?? "Unknown",
     });
+  } catch (error) {
+    console.error("Error updating transaction:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
 
 // POST create transaction
-app.post("/transactions", (req: Request, res: Response) => {
+
+app.post("/transactions", async (req: Request, res: Response) => {
   const validation = createTransactionSchema.safeParse(req.body);
 
   if (!validation.success) {
@@ -194,33 +209,32 @@ app.post("/transactions", (req: Request, res: Response) => {
 
   const { date, recipient, amount } = validation.data;
 
-  const newId =
-    transactions.length > 0
-      ? Math.max(...transactions.map((item) => item.id)) + 1
-      : 1;
+  try {
+    const classificationResult = await pool.query(
+      `SELECT classification
+       FROM public.recipient_classifications
+       WHERE recipient = $1`,
+      [recipient],
+    );
 
-  const classificationMap: Record<string, string> = {
-    ICA: "Food",
-    SL: "Transport",
-    Netflix: "Entertainment",
-  };
+    const classification =
+      classificationResult.rows[0]?.classification ?? "Unknown";
 
-  const classification =
-    amount < 0
-      ? classificationMap[recipient] ?? "Unknown"
-      : undefined;
+    const result = await pool.query(
+      `INSERT INTO public.transactions (date, recipient, amount)
+       VALUES ($1, $2, $3)
+       RETURNING id, date, recipient, amount`,
+      [date, recipient, amount],
+    );
 
-  const newTransaction = {
-    id: newId,
-    date,
-    recipient,
-    amount,
-    ...(classification && { classification }),
-  };
-
-  transactions.push(newTransaction);
-
-  res.status(201).json(newTransaction);
+    res.status(201).json({
+      ...result.rows[0],
+      classification,
+    });
+  } catch (error) {
+    console.error("Error creating transaction:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 // GET classifications from PostgreSQL
