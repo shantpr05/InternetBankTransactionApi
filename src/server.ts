@@ -1,133 +1,70 @@
+
 import express, {
   type NextFunction,
   type Request,
   type Response,
 } from "express";
 import transactions from "../data/transactions.json";
-import classifications from "../data/classifications.json";
-import { type UpdateTransaction } from "./types";
 import dotenv from "dotenv";
-import { pool } from "./db";
+import { getRecipientClassifications } from "./classifications";
+import {
+  createTransactionSchema,
+  dateFilterSchema,
+  transactionIdSchema,
+  updateTransactionSchema,
+} from "./schemas";
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-// Middleware
 app.use(express.json());
 
-// Check if a date is valid and uses YYYY-MM-DD format
-const isValidDate = (date: string): boolean => {
-  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-
-  if (!datePattern.test(date)) {
-    return false;
-  }
-
-  const parsedDate = new Date(`${date}T00:00:00Z`);
-
-  return (
-    !Number.isNaN(parsedDate.getTime()) &&
-    parsedDate.toISOString().slice(0, 10) === date
-  );
-};
-
-// Check if a transaction ID is a positive integer
-const isValidTransactionId = (value: unknown): value is string => {
-  if (typeof value !== "string") {
-    return false;
-  }
-
-  const id = Number(value);
-
-  return Number.isInteger(id) && id > 0;
-};
-
-// Check if a value is a non-empty string
-const isNonEmptyString = (value: unknown): value is string => {
-  return typeof value === "string" && value.trim().length > 0;
-};
-
-// Check if amount is a valid finite number
-const isValidAmount = (value: unknown): value is number => {
-  return typeof value === "number" && Number.isFinite(value);
-};
-
-// Check if request body is a JSON object
-const isObjectBody = (
-  body: unknown,
-): body is Record<string, unknown> => {
-  return typeof body === "object" && body !== null && !Array.isArray(body);
+const sendValidationError = (
+  res: Response,
+  issues: { path: PropertyKey[]; message: string }[],
+): void => {
+  res.status(400).json({
+    message: "Validation failed",
+    errors: issues.map((issue) => ({
+      field: issue.path.map(String).join(".") || "request",
+      message: issue.message,
+    })),
+  });
 };
 
 // GET all transactions with optional date filtering
 app.get("/transactions", (req: Request, res: Response) => {
-  const { from, to } = req.query;
+  const validation = dateFilterSchema.safeParse(req.query);
 
-  if (
-    (from !== undefined && typeof from !== "string") ||
-    (to !== undefined && typeof to !== "string")
-  ) {
-    res.status(400).json({
-      message: "Invalid date filter",
-    });
+  if (!validation.success) {
+    sendValidationError(res, validation.error.issues);
     return;
   }
 
-  if (typeof from === "string" && !isValidDate(from)) {
-    res.status(400).json({
-      message: "Invalid from date. Use YYYY-MM-DD format",
-    });
-    return;
-  }
+  const { from, to } = validation.data;
 
-  if (typeof to === "string" && !isValidDate(to)) {
-    res.status(400).json({
-      message: "Invalid to date. Use YYYY-MM-DD format",
-    });
-    return;
-  }
-
-  if (typeof from === "string" && typeof to === "string" && from > to) {
-    res.status(400).json({
-      message: "Invalid date interval: from cannot be later than to",
-    });
-    return;
-  }
-
-  let filteredTransactions = transactions;
-
-  if (typeof from === "string") {
-    filteredTransactions = filteredTransactions.filter(
-      (transaction) => transaction.date >= from,
-    );
-  }
-
-  if (typeof to === "string") {
-    filteredTransactions = filteredTransactions.filter(
-      (transaction) => transaction.date <= to,
-    );
-  }
+  const filteredTransactions = transactions.filter(
+    (transaction) =>
+      (!from || transaction.date >= from) &&
+      (!to || transaction.date <= to),
+  );
 
   res.status(200).json(filteredTransactions);
 });
 
 // GET one transaction
 app.get("/transactions/:id", (req: Request, res: Response) => {
-  const idParam = req.params.id;
+  const validation = transactionIdSchema.safeParse(req.params.id);
 
-  if (!isValidTransactionId(idParam)) {
-    res.status(400).json({
-      message: "Invalid transaction ID. ID must be a positive integer",
-    });
+  if (!validation.success) {
+    sendValidationError(res, validation.error.issues);
     return;
   }
 
-  const id = Number(idParam);
-
   const transaction = transactions.find(
-    (transaction) => transaction.id === id,
+    (item) => item.id === validation.data,
   );
 
   if (!transaction) {
@@ -140,53 +77,42 @@ app.get("/transactions/:id", (req: Request, res: Response) => {
   res.status(200).json(transaction);
 });
 
-// DELETE transaction by id
+// DELETE transaction by ID
 app.delete("/transactions/:id", (req: Request, res: Response) => {
-  const idParam = req.params.id;
+  const validation = transactionIdSchema.safeParse(req.params.id);
 
-  if (!isValidTransactionId(idParam)) {
-    res.status(400).json({
-      message: "Invalid transaction ID. ID must be a positive integer",
-    });
+  if (!validation.success) {
+    sendValidationError(res, validation.error.issues);
     return;
   }
 
-  const id = Number(idParam);
-
-  const transactionIndex = transactions.findIndex(
-    (transaction) => transaction.id === id,
+  const index = transactions.findIndex(
+    (item) => item.id === validation.data,
   );
 
-  if (transactionIndex === -1) {
+  if (index === -1) {
     res.status(404).json({
       message: "Transaction not found",
     });
     return;
   }
 
-  const deletedTransaction = transactions.splice(
-    transactionIndex,
-    1,
-  )[0];
+  const deletedTransaction = transactions.splice(index, 1)[0];
 
   res.status(200).json(deletedTransaction);
 });
 
-// PUT update transaction by id
+// PUT update transaction by ID
 app.put("/transactions/:id", (req: Request, res: Response) => {
-  const idParam = req.params.id;
+  const idValidation = transactionIdSchema.safeParse(req.params.id);
 
-  if (!isValidTransactionId(idParam)) {
-    res.status(400).json({
-      message: "Invalid transaction ID. ID must be a positive integer",
-    });
+  if (!idValidation.success) {
+    sendValidationError(res, idValidation.error.issues);
     return;
   }
 
-  const id = Number(idParam);
-
   const transaction = transactions.find(
-    (transaction) => transaction.id === id,
+    (item) => item.id === idValidation.data,
   );
 
   if (!transaction) {
@@ -196,132 +122,44 @@ app.put("/transactions/:id", (req: Request, res: Response) => {
     return;
   }
 
-  if (!isObjectBody(req.body)) {
-    res.status(400).json({
-      message: "Request body must be a JSON object",
-    });
+  const bodyValidation = updateTransactionSchema.safeParse(req.body);
+
+  if (!bodyValidation.success) {
+    sendValidationError(res, bodyValidation.error.issues);
     return;
   }
 
-  const { date, recipient, amount } = req.body;
-
-  if (
-    date === undefined &&
-    recipient === undefined &&
-    amount === undefined
-  ) {
-    res.status(400).json({
-      message: "At least one of date, recipient or amount is required",
-    });
-    return;
-  }
-
-  if (
-    date !== undefined &&
-    (typeof date !== "string" || !isValidDate(date))
-  ) {
-    res.status(400).json({
-      message: "Invalid date. Use YYYY-MM-DD format",
-    });
-    return;
-  }
-
-  if (
-    recipient !== undefined &&
-    !isNonEmptyString(recipient)
-  ) {
-    res.status(400).json({
-      message: "Recipient must be a non-empty string",
-    });
-    return;
-  }
-
-  if (amount !== undefined && !isValidAmount(amount)) {
-    res.status(400).json({
-      message: "Amount must be a valid number",
-    });
-    return;
-  }
-
-  const updates: UpdateTransaction = {};
+  const { date, recipient, amount } = bodyValidation.data;
 
   if (date !== undefined) {
-    updates.date = date;
+    transaction.date = date;
   }
 
   if (recipient !== undefined) {
-    updates.recipient = recipient.trim();
+    transaction.recipient = recipient;
   }
 
   if (amount !== undefined) {
-    updates.amount = amount;
-  }
-
-  if (updates.date !== undefined) {
-    transaction.date = updates.date;
-  }
-
-  if (updates.recipient !== undefined) {
-    transaction.recipient = updates.recipient;
-  }
-
-  if (updates.amount !== undefined) {
-    transaction.amount = updates.amount;
+    transaction.amount = amount;
   }
 
   res.status(200).json(transaction);
 });
 
-// POST create a new transaction
+// POST create transaction
 app.post("/transactions", (req: Request, res: Response) => {
-  if (!isObjectBody(req.body)) {
-    res.status(400).json({
-      message: "Request body must be a JSON object",
-    });
+  const validation = createTransactionSchema.safeParse(req.body);
+
+  if (!validation.success) {
+    sendValidationError(res, validation.error.issues);
     return;
   }
 
-  const { date, recipient, amount } = req.body;
-
-  if (
-    date === undefined ||
-    recipient === undefined ||
-    amount === undefined
-  ) {
-    res.status(400).json({
-      message: "date, recipient and amount are required",
-    });
-    return;
-  }
-
-  if (typeof date !== "string" || !isValidDate(date)) {
-    res.status(400).json({
-      message: "Invalid date. Use YYYY-MM-DD format",
-    });
-    return;
-  }
-
-  if (!isNonEmptyString(recipient)) {
-    res.status(400).json({
-      message: "Recipient must be a non-empty string",
-    });
-    return;
-  }
-
-  if (!isValidAmount(amount)) {
-    res.status(400).json({
-      message: "Amount must be a valid number",
-    });
-    return;
-  }
-
-  const cleanRecipient = recipient.trim();
+  const { date, recipient, amount } = validation.data;
 
   const newId =
     transactions.length > 0
-      ? Math.max(
-          ...transactions.map((transaction) => transaction.id),
-        ) + 1
+      ? Math.max(...transactions.map((item) => item.id)) + 1
       : 1;
 
   const classificationMap: Record<string, string> = {
@@ -330,17 +168,15 @@ app.post("/transactions", (req: Request, res: Response) => {
     Netflix: "Entertainment",
   };
 
-  let classification: string | undefined;
-
-  if (amount < 0) {
-    classification =
-      classificationMap[cleanRecipient] ?? "Unknown";
-  }
+  const classification =
+    amount < 0
+      ? classificationMap[recipient] ?? "Unknown"
+      : undefined;
 
   const newTransaction = {
     id: newId,
     date,
-    recipient: cleanRecipient,
+    recipient,
     amount,
     ...(classification && { classification }),
   };
@@ -350,10 +186,19 @@ app.post("/transactions", (req: Request, res: Response) => {
   res.status(201).json(newTransaction);
 });
 
-// GET all classifications
-app.get("/classifications", (_req: Request, res: Response) => {
-  res.status(200).json(classifications);
-});
+// GET classifications from PostgreSQL
+app.get(
+  "/classifications",
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const classifications = await getRecipientClassifications();
+
+      res.status(200).json(classifications);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 // Handle unknown routes
 app.use((_req: Request, res: Response) => {
@@ -385,7 +230,6 @@ app.use(
   },
 );
 
-// Start the server on port 3000
 app.listen(PORT, () => {
   console.log(`Server is running at http://localhost:${PORT}`);
 });
