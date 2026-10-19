@@ -141,7 +141,7 @@ app.get("/transactions/:id", (req: Request, res: Response) => {
 });
 
 // DELETE transaction by id
-app.delete("/transactions/:id", (req: Request, res: Response) => {
+app.delete("/transactions/:id", async (req: Request, res: Response) => {
   const idParam = req.params.id;
 
   if (!isValidTransactionId(idParam)) {
@@ -153,27 +153,32 @@ app.delete("/transactions/:id", (req: Request, res: Response) => {
 
   const id = Number(idParam);
 
-  const transactionIndex = transactions.findIndex(
-    (transaction) => transaction.id === id,
-  );
+  try {
+    const result = await pool.query(
+      "DELETE FROM transactions WHERE id = $1 RETURNING *",
+      [id],
+    );
 
-  if (transactionIndex === -1) {
-    res.status(404).json({
-      message: "Transaction not found",
+    const deletedTransaction = result.rows[0];
+
+    if (!deletedTransaction) {
+      res.status(404).json({
+        message: "Transaction not found",
+      });
+      return;
+    }
+
+    res.status(200).json(deletedTransaction);
+  } catch (error: unknown) {
+    console.error(error);
+    res.status(500).json({
+      message: "Internal server error",
     });
-    return;
   }
-
-  const deletedTransaction = transactions.splice(
-    transactionIndex,
-    1,
-  )[0];
-
-  res.status(200).json(deletedTransaction);
 });
 
 // PUT update transaction by id
-app.put("/transactions/:id", (req: Request, res: Response) => {
+app.put("/transactions/:id", async (req: Request, res: Response) => {
   const idParam = req.params.id;
 
   if (!isValidTransactionId(idParam)) {
@@ -184,17 +189,6 @@ app.put("/transactions/:id", (req: Request, res: Response) => {
   }
 
   const id = Number(idParam);
-
-  const transaction = transactions.find(
-    (transaction) => transaction.id === id,
-  );
-
-  if (!transaction) {
-    res.status(404).json({
-      message: "Transaction not found",
-    });
-    return;
-  }
 
   if (!isObjectBody(req.body)) {
     res.status(400).json({
@@ -257,19 +251,36 @@ app.put("/transactions/:id", (req: Request, res: Response) => {
     updates.amount = amount;
   }
 
-  if (updates.date !== undefined) {
-    transaction.date = updates.date;
-  }
+  try {
+    const result = await pool.query(
+      ` 
+      UPDATE transactions
+      SET 
+      date = COALESCE($1, date),
+      recipient = COALESCE($2, recipient),
+      amount = COALESCE($3, amount)
+      WHERE id = $4
+      RETURNING *
+      `,
+      [updates.date, updates.recipient, updates.amount, id],
+    );
 
-  if (updates.recipient !== undefined) {
-    transaction.recipient = updates.recipient;
-  }
+    const updatedTransaction = result.rows[0];
 
-  if (updates.amount !== undefined) {
-    transaction.amount = updates.amount;
-  }
+    if (!updatedTransaction) {
+      res.status(404).json({
+        message: "Transaction not found",
+      });
+      return;
+    }
 
-  res.status(200).json(transaction);
+    res.status(200).json(updatedTransaction);
+  } catch (error: unknown) {
+    console.error(error);
+    res.status(500).json({
+      message: "Internal server error",
+    });
+  }
 });
 
 // POST create a new transaction
