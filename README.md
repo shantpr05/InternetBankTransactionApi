@@ -113,6 +113,20 @@ npx tsx src/cli.ts
 
 The terminal application communicates with the Express API. It does not read the database directly.
 
+## Lint and Type Check
+
+Run ESLint on the project:
+
+```bash
+npm run lint
+```
+
+Check the code for TypeScript errors:
+
+```bash
+npm run typecheck
+```
+
 ## API Endpoints
 
 | Method | Endpoint            | Description                   |
