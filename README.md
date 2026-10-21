@@ -1,6 +1,6 @@
 # Internet Bank Transaction App
 
-A small Internet Bank Transaction App built with **Node.js, Express, TypeScript, and @inquirer/prompts**.
+A small Internet Bank Transaction App built with **Node.js, Express, TypeScript, PostgreSQL, and @inquirer/prompts**.
 
 The application provides a REST API for managing savings account transactions and a terminal application that communicates with the API using HTTP requests.
 
@@ -20,7 +20,7 @@ The project supports CRUD operations, automatic classification of outgoing trans
 * Handle invalid IDs and missing transactions
 * Terminal application using `@inquirer/prompts`
 * CLI communicates with the Express API using HTTP requests
-* Transaction and classification data are simulated using JSON files
+* Transaction and classification data are stored in PostgreSQL
 
 ## Technologies
 
@@ -28,7 +28,10 @@ The project supports CRUD operations, automatic classification of outgoing trans
 * Express
 * TypeScript
 * `@inquirer/prompts`
-* JSON
+* PostgreSQL
+* Docker
+* Zod
+* ESLint
 * REST API
 * Git and GitHub
 
@@ -39,12 +42,14 @@ InternetBankTransactionApi/
 ├── src/
 │   ├── server.ts
 │   ├── cli.ts
+│   ├── db.ts
+│   ├── schemas.ts
+│   ├── classifications.ts
 │   └── types.ts
 │
-├── data/
-│   ├── transactions.json
-│   └── classifications.json
-│
+├── compose.yml
+├── init.sql
+├── .env.example
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -58,15 +63,39 @@ Clone the repository and install the dependencies:
 npm install
 ```
 
+## Environment Variables
+
+Create a `.env` file from `.env.example` and fill in your own values.
+
+## Start the Database (Docker)
+
+Start PostgreSQL and pgAdmin with Docker Compose:
+
+```bash
+docker compose up -d
+```
+
+### Initialize the database
+
+The first time you start the database, run `init.sql` to create the tables and seed data:
+
+```bash
+docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < init.sql
+```
+
+The script creates the tables `transactions` and `recipient_classifications` and inserts a few example rows. It is safe to run more than once (`IF NOT EXISTS` / `ON CONFLICT`).
+
+You can also run the SQL from pgAdmin at `http://localhost:<PGADMIN_PORT>`.
+
 ## Start the API
 
 Start the Express API with:
 
 ```bash
-npx tsx src/server.ts
+npm run dev
 ```
 
-The API runs on:
+The API runs on the port set in `PORT` (default `3000`):
 
 ```text
 http://localhost:3000
@@ -82,7 +111,7 @@ Start the CLI with:
 npx tsx src/cli.ts
 ```
 
-The terminal application communicates with the Express API. It does not read the transaction JSON data directly.
+The terminal application communicates with the Express API. It does not read the database directly.
 
 ## API Endpoints
 
@@ -273,6 +302,7 @@ The API uses HTTP status codes to indicate the result of a request.
 | `201 Created`     | Transaction created successfully |
 | `400 Bad Request` | Invalid input                    |
 | `404 Not Found`   | Transaction does not exist       |
+| `500 Internal Server Error` | Database or server error |
 
 Examples of error messages include:
 
@@ -282,32 +312,36 @@ Examples of error messages include:
 }
 ```
 
-and:
+Validation errors are handled with Zod and list each invalid field:
 
 ```json
 {
-  "message": "Invalid transaction ID. ID must be a positive integer."
+	"message": "Validation failed",
+	"errors": [
+		{
+			"field": "request",
+			"message": "Invalid input: expected number, received NaN"
+		}
+	]
 }
 ```
 
 ## Data
 
-The project uses JSON files to simulate external services:
+Transactions and classifications are stored in PostgreSQL in two tables:
 
 ```text
-data/transactions.json
-data/classifications.json
+transactions
+recipient_classifications
 ```
 
-No database or real external service is required for this assignment.
-
-Transaction changes are handled in memory while the application is running.
+The schema and seed data are defined in `init.sql`. Changes made through the API are persisted in the Docker volume `pgdata`.
 
 ## CLI and API Communication
 
 The terminal application communicates with the Express API through HTTP.
 
-The CLI does not access `transactions.json` directly.
+The CLI does not access the database directly.
 
 The general flow is:
 
@@ -320,7 +354,7 @@ HTTP Request
   ↓
 Express API
   ↓
-Transaction Data
+PostgreSQL
   ↓
 Express API
   ↓
