@@ -106,16 +106,18 @@ app.get("/transactions/:id", async (req: Request, res: Response) => {
   }
 });
 
-// DELETE transaction by id
+ // DELETE transaction by id
 app.delete("/transactions/:id", async (req: Request, res: Response) => {
   const idParam = req.params.id;
+
+  const validation = transactionIdSchema.safeParse(idParam);
 
   if (!validation.success) {
     sendValidationError(res, validation.error.issues);
     return;
   }
 
-  const id = Number(idParam);
+  const id = validation.data;
 
   try {
     const result = await pool.query(
@@ -140,7 +142,6 @@ app.delete("/transactions/:id", async (req: Request, res: Response) => {
     });
   }
 });
-
 // PUT update transaction by id
 
 app.put("/transactions/:id", async (req: Request, res: Response) => {
